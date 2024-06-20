@@ -1,23 +1,23 @@
 cmake
 wheel
-numpy>1.2
+# numpy>1.2
 hydra-core==1.1.1
 hydra-colorlog
-matplotlib
-opencv-python
+# matplotlib
+# opencv-python
 omegaconf
 plotly
 pyhash
 pytorch-lightning==1.4.9
-torch==1.10.0
-torchvision
+# torch==1.10.0
+# torchvision
 MulticoreTSNE
 gitpython
-scipy
+# scipy
 sentence-transformers
-setuptools==57.5.0
-gym
-moviepy
-tqdm
-termcolor
-wandb
+# setuptools==57.5.0
+# gym
+# moviepy
+# tqdm
+# termcolor
+# wandb
