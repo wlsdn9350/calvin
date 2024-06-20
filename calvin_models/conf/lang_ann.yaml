@@ -13,11 +13,8 @@ defaults:
   - override hydra/hydra_logging: colorlog
   - override datamodule/observation_space: state_only
   - override datamodule/datasets: vision_only
-#  - override datamodule/datasets/vision_dataset: vision_shm
-  - _self_
-
 seed: 42
-log_dir: ../../
+log_dir: ../
 slurm: false
 eps: 0.01
 postprocessing: true
@@ -31,13 +28,13 @@ datamodule:
     vision_dataset:
       min_window_size: 64
       max_window_size: 64
-  shuffle_val: true
 
 hydra:
   run:
-    dir: ${log_dir}/runs/${now:%Y-%m-%d}/${now:%H-%M-%S}_lang_ann
+    dir: ${log_dir}/runs/${now:%Y-%m-%d}/${now:%H-%M-%S}_${hydra.job.override_dirname}
   sweep:
-    dir: ${log_dir}/runs/${now:%Y-%m-%d}/${now:%H-%M-%S}_lang_ann
+    dir: ${log_dir}/runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    subdir: ${hydra.job.override_dirname}
   job:
     config:
       override_dirname:

@@ -1,6 +1,6 @@
 # Dataset
 The CALVIN dataset comes with 6 hours of teleoperated play data in each of the 4 environments.
-You can use [this script](../scripts/visualize_dataset.py) to visualize the dataset.
+You can use [this script](scripts/visualize_dataset.py) to visualize the dataset.
 
 ## Download
 
@@ -27,32 +27,6 @@ $ sh download_data.sh ABCD
 $ cd $CALVIN_ROOT/dataset
 $ sh download_data.sh debug
 ```
-
-YOu can verify the integrity of the downloaded zips with the following commands:
-```bash
-$ cd $CALVIN_ROOT/dataset
-$ wget http://calvin.cs.uni-freiburg.de/dataset/sha256sum.txt
-$ sha256sum --check --ignore-missing sha256sum.txt
-```
-
-## Language Embeddings
-Since Sep 16 2022, additional language embeddings are part of the dataset on the server. If you downloaded the dataset before,
-you can manually download the embeddings by running
-```
-cd $CALVIN_ROOT/dataset
-sh download_lang_embeddings.sh D | ABC | ABCD
-```
-Currently, the available embeddings are:
-- lang_all-distilroberta-v1
-- lang_all-MiniLM-L6-v2
-- lang_all-mpnet-base-v2
-- lang_BERT
-- lang_clip_resnet50
-- lang_clip_ViTB32
-- lang_huggingface_distilroberta
-- lang_huggingface_mpnet
-- lang_msmarco-bert-base-dot-v5
-- lang_paraphrase-MiniLM-L3-v2
 
 ## Data Structure
 Each interaction timestep is stored in a dictionary inside a numpy file and contains all corresponding sensory observations, different action spaces, state information and language annoations.
@@ -127,8 +101,9 @@ The `embeddings.npy` file is only present on the validation folder, this file co
 
 ## Visualize Language Annotations
 We provide a script to generate a video that visualizes the language annotations of the recorded play data.
-By default we visualize the first 100 sequences, but feel free to more sequences (just change this [line](https://github.com/mees/calvin/blob/main/calvin_models/calvin_agent/utils/visualize_annotations.py#L55)).
+By default we visualize the first 100 sequences, but feel free to more sequences (just change this [line](https://github.com/mees/calvin/blob/main/calvin_models/calvin_agent/utils/visualize_annotations.py#L57)).
+A example video is.
 ```
 cd $CALVIN_ROOT/calvin_models/calvin_agent
-python utils/visualize_annotations.py datamodule.root_data_dir=$CALVIN_ROOT/dataset/task_D_D/ datamodule/observation_space=lang_rgb_static_rel_act
+python utils/visualize_annotations.py datamodule.root_data_dir=$CALVIN_ROOT/dataset/task_D_D/ datamodule/observation_space=lang_rgb_static
 ```

@@ -9,6 +9,7 @@ from calvin_agent.rollout.rollout_video import RolloutVideo
 from calvin_agent.utils.utils import get_portion_of_batch_ids
 import hydra
 import numpy as np
+import pytorch_lightning as pl
 from pytorch_lightning import Callback, LightningModule, Trainer
 import torch
 import torch.distributed as dist
@@ -76,7 +77,6 @@ class Rollout(Callback):
         min_window_size,
         max_window_size,
         lang_folder,
-        val_annotations,
         id_selection_strategy="select_first",
     ):
         self.env = None  # type: Any
@@ -101,7 +101,6 @@ class Rollout(Callback):
         self.modalities = []  # ["vis", "lang"] if self.lang else ["vis"]
         self.embeddings = None
         self.add_goal_thumbnail = add_goal_thumbnail
-        self.val_annotations = val_annotations
         self.lang_folder = lang_folder
         self.pick_task_ids = partial(
             eval(id_selection_strategy), min_window_size=min_window_size, max_window_size=max_window_size
@@ -128,8 +127,13 @@ class Rollout(Callback):
                     log_to_file=self.log_video_to_file,
                     save_dir=self.save_dir,
                 )
-            if "lang" in self.modalities:
-                pl_module.load_lang_embeddings(dataset.abs_datasets_dir / dataset.lang_folder / "embeddings.npy")  # type: ignore
+            self.embeddings = (
+                np.load(dataset.abs_datasets_dir / self.lang_folder / "embeddings.npy", allow_pickle=True,).reshape(
+                    -1
+                )[0]
+                if "lang" in self.modalities
+                else None
+            )
 
     def on_validation_batch_end(
         self,
@@ -165,7 +169,7 @@ class Rollout(Callback):
                     # log rollout videos
                     self.rollout_video.log(pl_module.global_step)
                 # collect the task rollout counters of all validation batches and sum across tasks
-                acc_score = torch.tensor(0.0, device=pl_module.device)
+                acc_score = 0
                 for mod in self.modalities:
                     rollout_task_counter = reduce(add, [x["rollout_task_counter"][mod] for x in outputs[0]])
                     if dist.is_available() and dist.is_initialized():
@@ -183,7 +187,7 @@ class Rollout(Callback):
                         on_step=False,
                         sync_dist=True,
                     )
-                    acc_score += score
+                    acc_score += score  # type: ignore
                     print()
                     log_rank_0(f"Evaluating {mod} task success rates:")
                     for i in range(rollout_task_counter.shape[0]):
@@ -205,7 +209,7 @@ class Rollout(Callback):
                     print()
                 pl_module.log(
                     "tasks/average_sr",
-                    acc_score / len(self.modalities),
+                    torch.tensor(acc_score / len(self.modalities)),
                     on_step=False,
                     sync_dist=True,
                 )
@@ -260,10 +264,7 @@ class Rollout(Callback):
 
     def env_rollouts(
         self,
-        batch: Dict[
-            str,
-            Dict,
-        ],
+        batch: dict,
         pl_module: LightningModule,
     ) -> Dict[str, torch.Tensor]:
         """
@@ -301,9 +302,14 @@ class Rollout(Callback):
                     start_info = self.env.get_info()
 
                     if mod == "lang":
-                        # language goal
                         _task = np.random.choice(list(groundtruth_task))
-                        goal = self.val_annotations[_task][0]
+                        task_embeddings = self.embeddings[_task]["emb"]
+                        language_instruction = self.embeddings[_task]["ann"][0]
+                        goal = {
+                            "lang": torch.tensor(task_embeddings[np.random.randint(task_embeddings.shape[0])])
+                            .to(self.device)
+                            .float()
+                        }
                     else:
                         # goal image is last step of the episode
                         goal = {
@@ -341,7 +347,7 @@ class Rollout(Callback):
                     if record_video:
                         if self.add_goal_thumbnail:
                             if mod == "lang":
-                                self.rollout_video.add_language_instruction(goal)
+                                self.rollout_video.add_language_instruction(language_instruction)
                             else:
                                 self.rollout_video.add_goal_thumbnail(rgb_obs["rgb_static"][i, -1])
                         self.rollout_video.draw_outcome(success)
@@ -397,12 +403,15 @@ class Rollout(Callback):
                 batch_seq_ids.append(idx.cpu().numpy()[i])
         return task_ids, batch_seq_ids
 
-    def on_save_checkpoint(self, trainer: Trainer, pl_module: LightningModule, checkpoint: Dict[str, Any]) -> None:  # type: ignore
+    def on_save_checkpoint(self, trainer: Trainer, pl_module: pl.LightningModule, checkpoint: Dict[str, Any]) -> dict:  # type: ignore
         checkpoint["task_to_id_dict"] = self.task_to_id_dict
         checkpoint["id_to_task_dict"] = self.id_to_task_dict
         checkpoint["groundtruth_task_counter"] = self.groundtruth_task_counter
+        return checkpoint
 
-    def on_load_checkpoint(self, trainer: Trainer, pl_module: LightningModule, checkpoint: Dict[str, Any]) -> None:
-        self.task_to_id_dict = checkpoint.get("task_to_id_dict", None)
-        self.id_to_task_dict = checkpoint.get("id_to_task_dict", None)
-        self.groundtruth_task_counter = checkpoint.get("groundtruth_task_counter", None)
+    def on_load_checkpoint(  # type: ignore
+        self, trainer: Trainer, pl_module: LightningModule, callback_state: Dict[str, Any]
+    ) -> None:
+        self.task_to_id_dict = callback_state.get("task_to_id_dict", None)
+        self.id_to_task_dict = callback_state.get("id_to_task_dict", None)
+        self.groundtruth_task_counter = callback_state.get("groundtruth_task_counter", None)

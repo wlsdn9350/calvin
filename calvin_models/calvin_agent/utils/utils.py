@@ -29,11 +29,8 @@ def timeit(method):
 
 
 def get_git_commit_hash(repo_path: Path) -> str:
-    try:
-        repo = git.Repo(search_parent_directories=True, path=repo_path.parent)
-    except git.exc.InvalidGitRepositoryError:
-        return "Not a git repository. Are you using pycharm remote interpreter?"
-
+    repo = git.Repo(search_parent_directories=True, path=repo_path.parent)
+    assert repo, "not a repo"
     changed_files = [item.a_path for item in repo.index.diff(None)]
     if changed_files:
         print("WARNING uncommitted modified files: {}".format(",".join(changed_files)))
@@ -49,15 +46,12 @@ def get_checkpoints_for_epochs(experiment_folder: Path, epochs: Union[List, str]
 
 
 def get_all_checkpoints(experiment_folder: Path) -> List:
-    if not experiment_folder.is_dir():
-        return []
-    checkpoint_folder = experiment_folder / "saved_models"
-    if checkpoint_folder.is_dir():
-        return get_all_checkpoints(checkpoint_folder)
-
-    checkpoints = sorted(Path(experiment_folder).iterdir(), key=lambda chk: chk.stat().st_mtime)
-    if len(checkpoints):
-        return [chk for chk in checkpoints if chk.suffix == ".ckpt"]
+    if experiment_folder.is_dir():
+        checkpoint_folder = experiment_folder / "saved_models"
+        if checkpoint_folder.is_dir():
+            checkpoints = sorted(Path(checkpoint_folder).iterdir(), key=lambda chk: chk.stat().st_mtime)
+            if len(checkpoints):
+                return [chk for chk in checkpoints if chk.suffix == ".ckpt"]
     return []
 
 
@@ -67,6 +61,15 @@ def get_last_checkpoint(experiment_folder: Path) -> Union[Path, None]:
     if len(checkpoints):
         return checkpoints[-1]
     return None
+
+
+def save_executed_code() -> None:
+    print(hydra.utils.get_original_cwd())
+    print(os.getcwd())
+    shutil.copytree(
+        os.path.join(hydra.utils.get_original_cwd(), "calvin_agent"),
+        os.path.join(hydra.utils.get_original_cwd(), f"{os.getcwd()}/code/calvin_agent"),
+    )
 
 
 def info_cuda() -> Dict[str, Union[str, List[str]]]:
